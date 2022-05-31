@@ -1,0 +1,6 @@
+jupyter
+ipympl
+pandas
+protobuf<=3.20.*
+pytorch-lightning
+seaborn
