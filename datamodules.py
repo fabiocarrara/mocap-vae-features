@@ -79,16 +79,29 @@ def convert_data_file(data_path):
     
 
 class MoCapDataModule(pl.LightningDataModule):
-    def __init__(self, data_path, batch_size=8, seed=7):
+    def __init__(
+        self,
+        data_path,
+        train=None,
+        valid=None,
+        test=None,
+        batch_size=8,
+        seed=7,
+        force=False
+    ):
         super().__init__()
         self.data_path = Path(data_path)
+        self.train = train
+        self.valid = valid
+        self.test = test
         self.cache_path = self.data_path.with_suffix('.npz')
         self.batch_size = batch_size
 
+        self.force = force
         self.rng = np.random.default_rng(seed)
     
     def prepare_data(self):
-        if not self.cache_path.exists():
+        if self.force or not self.cache_path.exists():
             # convert .data into .npy/pth
             sample_ids, subsequences = convert_data_file(self.data_path)
             np.savez_compressed(self.cache_path, sample_ids=sample_ids, subsequences=subsequences)
@@ -104,17 +117,27 @@ class MoCapDataModule(pl.LightningDataModule):
         samples.columns = ['sequence_id', 'subsequence_id']
 
         grouped = samples.groupby('sequence_id')
-        groups = np.array([x for x in grouped.groups])
-        self.rng.shuffle(groups)
 
-        n_sequences = len(groups)
-        n_train = round(n_sequences * 0.70)
-        n_valid = round(n_sequences * 0.15)
-        n_test  = n_sequences - n_train - n_valid
-        
-        train_groups = groups[:n_train]
-        valid_groups = groups[n_train:n_train + n_valid]
-        test_groups  = groups[-n_test:]
+        if self.train is None:
+            groups = np.array([x for x in grouped.groups])
+            self.rng.shuffle(groups)
+
+            n_sequences = len(groups)
+            n_train = round(n_sequences * 0.70)
+            n_valid = round(n_sequences * 0.15)
+            n_test  = n_sequences - n_train - n_valid
+            
+            train_groups = groups[:n_train]
+            valid_groups = groups[n_train:n_train + n_valid]
+            test_groups  = groups[-n_test:]
+        else:
+            with open(self.train, 'r') as train_file:
+                train_groups = list(map(str.rstrip, train_file))
+            with open(self.valid, 'r') as valid_file:
+                valid_groups = list(map(str.rstrip, valid_file))
+            with open(self.test , 'r') as  test_file:
+                test_groups  = list(map(str.rstrip,  test_file))
+                
 
         train_idx = list(chain.from_iterable(grouped.get_group(x).index for x in train_groups))
         valid_idx = list(chain.from_iterable(grouped.get_group(x).index for x in valid_groups))
@@ -153,10 +176,18 @@ class MoCapDataModule(pl.LightningDataModule):
 
 
 if __name__ == "__main__":
-    data_path = 'data/class130-actions-segment120_shift16-coords_normPOS-fps12.data'
-    dm = MoCapDataModule(data_path)
+    # data_path = 'data/class130-actions-segment120_shift16-coords_normPOS-fps12.data'
+    data_path = 'data/class130-actions-segment40_shift20-coords_normPOS-fps12.data'
+    train_split = 'data/2foldsBal_2-class122.txt' 
+    test_split = 'data/2foldsBal_1-class122.txt'
+    dm = MoCapDataModule(
+        data_path,
+        train=train_split,
+        valid=test_split,
+        test=test_split
+    )
     dm.prepare_data()
     dm.setup()
 
-    train_dataset = dm.train_dataloader()
-    breakpoint()
+    for x in dm.train_dataloader():
+        breakpoint()

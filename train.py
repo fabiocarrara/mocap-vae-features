@@ -189,6 +189,15 @@ def main(args):
     root_dir = Path('runs') / args.data_path.stem
     root_dir.mkdir(parents=True, exist_ok=True)
 
+    dm = MoCapDataModule(
+        args.data_path,
+        train=args.train_split,
+        valid=args.valid_split,
+        test=args.test_split,
+        batch_size=args.batch_size
+    )
+    dm.save_hyperparameters()
+
     model = LitVAE(
         input_length=args.input_length,
         latent_dim=args.latent_dim
@@ -250,6 +259,9 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train MoCap VAE')
     parser.add_argument('data_path', type=Path, help='data path')
+    parser.add_argument('--train-split', type=Path, help='train sequence ids')
+    parser.add_argument('--valid-split', type=Path, help='validation sequence ids')
+    parser.add_argument('--test-split', type=Path, help='test sequence ids')
     
     parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
