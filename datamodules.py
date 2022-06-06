@@ -52,18 +52,29 @@ def convert_subsequence_to_numpy(subsequence_lines):
     return sample_id, data
 
 
+def normalize_sequence_length(sequence, max_length):
+    pad = max_length - len(sequence)
+    if pad > 0:  # pad small sequences
+        pad = ((pad // 2, -(-pad // 2)), (0, 0), (0, 0))
+        sequence = np.pad(sequence, pad, mode='edge')
+    
+    sequence = sequence[:max_length]  # crop big sequences
+    return sequence
+
+
 def convert_data_file(data_path):
     subsequences = split_subsequences_from_data_file(data_path)
     subsequences = map(convert_subsequence_to_numpy, tqdm(subsequences))
     subsequences = list(subsequences)
 
-    # drop truncated subsequences
-    common_length = Counter(len(s) for _, s in subsequences).most_common(1)[0][0]
-    subsequences = filter(lambda x: len(x[1]) == common_length, subsequences)
+    # pad/cut subsequences to the same length
+    max_length = max(len(s) for _, s in subsequences)
+    print('Fixed Subsequence Length:', max_length)
     sample_ids, subsequences = zip(*subsequences)
+    subsequences = map(lambda x: normalize_sequence_length(x, max_length), subsequences)
 
     sample_ids = np.array(sample_ids)
-    subsequences = np.stack(subsequences)
+    subsequences = np.stack(list(subsequences))
     return sample_ids, subsequences
     
 
