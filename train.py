@@ -218,10 +218,22 @@ def main(args):
     predictions = pd.DataFrame(predictions, index=dm.predict_ids)
     predictions.index.name = 'id'
 
+    # prediction csv
     run_dir = Path(trainer.log_dir)
     predictions_csv = run_dir / 'predictions.csv'
     predictions.to_csv(predictions_csv)
 
+    # predictions in .data format
+    predictions_data_file = run_dir / 'predictions.data'
+    predictions.index = predictions.index.str.rsplit('_', 1, expand=True).rename(['seq_id', 'frame'])
+    
+    with open(predictions_data_file, 'w') as f:
+        for seq_id, group in predictions.groupby(level='seq_id'):
+            print(f'#objectKey messif.objects.keys.AbstractObjectKey {seq_id}', file=f)
+            print(f'{len(group)};mcdr.objects.ObjectMocapPose', file=f)
+            print(group.to_csv(index=False, header=False), end='', file=f)
+    
+    # segments ids
     pd.DataFrame(dm.train_ids).to_csv(run_dir / 'train_ids.txt', header=False, index=False)
     pd.DataFrame(dm.valid_ids).to_csv(run_dir / 'valid_ids.txt', header=False, index=False)
     pd.DataFrame( dm.test_ids).to_csv(run_dir /  'test_ids.txt', header=False, index=False)
