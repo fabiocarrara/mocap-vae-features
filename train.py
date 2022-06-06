@@ -219,9 +219,9 @@ def main(args):
     except ValueError as e:
         print('Something\'s wrong happened while fitting:', e)
 
-    trainer.test(datamodule=dm)
+    trainer.test(ckpt_path='best', datamodule=dm)
     
-    predictions = trainer.predict(datamodule=dm)
+    predictions = trainer.predict(ckpt_path='best', datamodule=dm)
     predictions = torch.concat(predictions, 0).numpy()
     predictions = pd.DataFrame(predictions, index=dm.predict_ids)
     predictions.index.name = 'id'
