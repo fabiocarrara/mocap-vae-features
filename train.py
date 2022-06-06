@@ -1,4 +1,5 @@
 import argparse
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -41,7 +42,7 @@ class LitVAE(pl.LightningModule):
     def __init__(
         self,
         input_dim=93,
-        enc_out_dim=512,
+        input_length=8,
         latent_dim=256,
     ):
         super().__init__()
@@ -58,17 +59,22 @@ class LitVAE(pl.LightningModule):
             ResBlock(128, 256, downsample=True),  # output: (T/4) x 256
         )
 
+        encoder_output_dim = 256 * input_length // 4
+        up_factor = lambda i: 2 if 2**(i+1) <= input_length else 1
+        last_factor = input_length / 2**math.floor(math.log2(input_length))
+
         # distribution parameters
-        self.fc_mu = nn.Linear(enc_out_dim, latent_dim)
-        self.fc_var = nn.Linear(enc_out_dim, latent_dim)
+        self.fc_mu  = nn.Linear(encoder_output_dim, latent_dim)
+        self.fc_var = nn.Linear(encoder_output_dim, latent_dim)
 
         self.decoder = nn.Sequential(  # input: 1 x latent_dim
-            nn.Upsample(scale_factor=2),  # output: 2 x latent_dim
+            nn.Upsample(scale_factor=up_factor(0)),  # output: 2 x latent_dim
             ResBlock(latent_dim, 256),  # output: 2 x 256
-            nn.Upsample(scale_factor=2),  # output: 4 x 256
+            nn.Upsample(scale_factor=up_factor(1)),  # output: 4 x 256
             ResBlock(256, 128),  # output: 4 x 128
-            nn.Upsample(scale_factor=2),  # output: 8 x 128
+            nn.Upsample(scale_factor=up_factor(2)),  # output: 8 x 128
             ResBlock(128, 64),  # output: 8 x 64
+            nn.Upsample(scale_factor=last_factor),  # output T x 64
             nn.Conv1d(64, input_dim, kernel_size=1, stride=1, padding=0),  # output: T x 64
         )
 
@@ -183,8 +189,10 @@ def main(args):
     root_dir = Path('runs') / args.data_path.stem
     root_dir.mkdir(parents=True, exist_ok=True)
 
-    dm = MoCapDataModule(args.data_path, batch_size=args.batch_size)
-    model = LitVAE(latent_dim=args.latent_dim)
+    model = LitVAE(
+        input_length=args.input_length,
+        latent_dim=args.latent_dim
+    )
 
     resume = None
     if args.resume:
@@ -243,7 +251,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train MoCap VAE')
     parser.add_argument('data_path', type=Path, help='data path')
     
+    parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
+
     parser.add_argument('-b', '--batch-size', type=int, default=512, help='batch size')
     parser.add_argument('-e', '--epochs', type=int, default=250, help='number of training epochs')
     parser.add_argument('-r', '--resume', default=False, action='store_true', help='resume training')
