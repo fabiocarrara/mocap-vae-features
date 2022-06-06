@@ -244,8 +244,8 @@ if __name__ == "__main__":
     parser.add_argument('data_path', type=Path, help='data path')
     
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
-    parser.add_argument('-b', '--batch-size', type=int, default=512, help='number of training epochs')
-    parser.add_argument('-e', '--epochs', type=int, default=100, help='number of training epochs')
+    parser.add_argument('-b', '--batch-size', type=int, default=512, help='batch size')
+    parser.add_argument('-e', '--epochs', type=int, default=250, help='number of training epochs')
     parser.add_argument('-r', '--resume', default=False, action='store_true', help='resume training')
 
     args = parser.parse_args()
