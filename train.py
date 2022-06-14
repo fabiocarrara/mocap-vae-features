@@ -199,6 +199,7 @@ def main(args):
     dm.save_hyperparameters()
 
     model = LitVAE(
+        input_dim=args.input_dim,
         input_length=args.input_length,
         latent_dim=args.latent_dim
     )
@@ -263,6 +264,7 @@ if __name__ == "__main__":
     parser.add_argument('--valid-split', type=Path, help='validation sequence ids')
     parser.add_argument('--test-split', type=Path, help='test sequence ids')
     
+    parser.add_argument('-s', '--input-dim', type=int, default=93, help='input size (= number of joints * spatial dimensions)')
     parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
 
