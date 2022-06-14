@@ -61,7 +61,7 @@ class LitVAE(pl.LightningModule):
 
         encoder_output_dim = 256 * input_length // 4
         up_factor = lambda i: 2 if 2**(i+1) <= input_length else 1
-        last_factor = input_length / 2**math.floor(math.log2(input_length))
+        last_factor = input_length / min(8, 2**math.floor(math.log2(input_length)))
 
         # distribution parameters
         self.fc_mu  = nn.Linear(encoder_output_dim, latent_dim)
