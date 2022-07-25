@@ -45,9 +45,11 @@ class LitVAE(pl.LightningModule):
         body_model='hdm05',
         input_length=8,
         latent_dim=256,
+        beta=1,
     ):
         super().__init__()
 
+        self.beta = beta
         self.save_hyperparameters()
 
         self.body_model = body_models.get_by_name(body_model)
@@ -137,7 +139,7 @@ class LitVAE(pl.LightningModule):
         kl = self.kl_divergence(z, mu, std)
 
         # elbo
-        elbo = (kl - recon_loss)
+        elbo = (self.beta * kl - recon_loss)
         elbo = elbo.mean()
 
         metrics = {
@@ -213,6 +215,7 @@ def main(args):
         input_dim=args.input_dim,
         input_length=args.input_length,
         latent_dim=args.latent_dim,
+        beta=args.beta,
     )
 
     resume = None
@@ -278,6 +281,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--input-dim', type=int, default=93, help='input size (= number of joints * spatial dimensions)')
     parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
+    parser.add_argument('--beta', type=float, default=100, help='KL divergence weight')
 
     parser.add_argument('-b', '--batch-size', type=int, default=512, help='batch size')
     parser.add_argument('-e', '--epochs', type=int, default=250, help='number of training epochs')
