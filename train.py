@@ -155,7 +155,16 @@ class LitVAE(pl.LightningModule):
 
         return metrics
 
-        return elbo
+    def on_validation_batch_start(self, batch, batch_idx, dataloader_idx):
+        if batch_idx == 0:
+            mu, std = self.encode(batch)
+            recon = self.decode(mu)
+
+            videos = np.stack([
+                create_tensor(x, x_hat, self.body_model.edges)
+                    for x, x_hat in zip(batch, recon)
+                ])  # B x T x 3 x H x W
+            self.logger.experiment.add_video('valid/anim', videos, self.epoch, self.fps)
 
     def training_step(self, *args, **kwargs):
         metrics = self._common_step('train', *args, **kwargs)

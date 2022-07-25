@@ -3,6 +3,7 @@ import itertools
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.backends.backend_agg as plt_backend_agg
 import matplotlib.animation as animation
 import torch
 from tqdm import tqdm
@@ -58,6 +59,42 @@ def create_gif(
     ani = animation.FuncAnimation(fig, ani_func, seq_len, repeat=False, blit=True)
     ani.save(output_path, fps=fps)
     plt.close()
+
+
+def _figure_to_numpy(figure):
+    canvas = plt_backend_agg.FigureCanvasAgg(figure)
+    canvas.draw()
+    data = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
+    w, h = figure.canvas.get_width_height()
+    image_hwc = data.reshape([h, w, 4])[:, :, 0:3]
+    image_chw = np.moveaxis(image_hwc, source=2, destination=0)
+    return image_chw
+
+
+def create_tensor(
+    x,
+    x_hat,
+    body_edges,
+    xlim=None,
+    ylim=None,
+    zlim=None,
+):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.set(xlim=xlim, xticks=[],
+           ylim=ylim, yticks=[],
+           zlim=zlim, zticks=[])
+    ax.grid(False)
+
+    images = []
+    for xi, xhi in zip(x, x_hat):
+        ax.clear()
+        visualize_pose(ax, xi, 'b', body_edges)
+        visualize_pose(ax, xhi, 'r', body_edges)
+        image = _figure_to_numpy(fig)
+        images.append(image)
+    
+    return np.stack(images)
 
 
 def main(args):
