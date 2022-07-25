@@ -87,6 +87,7 @@ class MoCapDataModule(pl.LightningDataModule):
         test=None,
         batch_size=8,
         seed=7,
+        fps=12,
         force=False
     ):
         super().__init__()
@@ -96,6 +97,7 @@ class MoCapDataModule(pl.LightningDataModule):
         self.test = test
         self.cache_path = self.data_path.with_suffix('.npz')
         self.batch_size = batch_size
+        self.fps = fps
 
         self.force = force
         self.rng = np.random.default_rng(seed)

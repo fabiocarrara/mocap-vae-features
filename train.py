@@ -46,10 +46,12 @@ class LitVAE(pl.LightningModule):
         input_length=8,
         latent_dim=256,
         beta=1,
+        fps=12,
     ):
         super().__init__()
 
         self.beta = beta
+        self.fps = fps
         self.save_hyperparameters()
 
         self.body_model = body_models.get_by_name(body_model)
