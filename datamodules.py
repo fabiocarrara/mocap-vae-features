@@ -99,6 +99,8 @@ class MoCapDataModule(pl.LightningDataModule):
 
         self.force = force
         self.rng = np.random.default_rng(seed)
+
+        self.save_hyperparameters(ignore=('force',))
     
     def prepare_data(self):
         if self.force or not self.cache_path.exists():
