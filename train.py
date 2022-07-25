@@ -131,6 +131,7 @@ class LitVAE(pl.LightningModule):
 
         # reconstruction loss
         recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
+        l2_loss = F.mse_loss(x_hat, x)
 
         # kl
         kl = self.kl_divergence(z, mu, std)
@@ -143,6 +144,7 @@ class LitVAE(pl.LightningModule):
             f'{stage}/elbo': elbo,
             f'{stage}/kl': kl.mean(),
             f'{stage}/recon_loss': recon_loss.mean(),
+            f'{stage}/l2_loss': l2_loss.mean(),
         }
 
         self.log_dict(metrics, prog_bar=True)
@@ -157,6 +159,7 @@ class LitVAE(pl.LightningModule):
     
     def validation_step(self, *args, **kwargs):
         metrics = self._common_step('val', *args, **kwargs)
+        self.log('hp_metric', metrics['val/l2_loss'])
         return metrics['val/elbo']
     
     def test_step(self, *args, **kwargs):
