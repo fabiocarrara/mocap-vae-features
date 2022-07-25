@@ -7,6 +7,7 @@ import matplotlib.animation as animation
 import torch
 from tqdm import tqdm
 
+import body_models
 from datamodules import MoCapDataModule
 from train import LitVAE
 
@@ -19,21 +20,9 @@ BODY_MODELS={
         (13, 24), (24, 25), (25, 26), (26, 27), (27, 28), (28, 29), (27, 30) # hand
     ),
 
-    'pku-mmd': (
-        (0, 1), (0, 12), (0, 16), 
-        (1, 20), (12, 13), (16, 17), 
-        (20, 2), (20, 4), (20, 8), (13, 14), (17, 18), 
-        (2, 3), (4, 5), (8, 9), (14, 15), (18, 19), 
-        (5, 6), (9, 10), 
-        (6, 7), (6, 22), (10, 11), (10, 24), 
-        (7, 21), (11, 23)
-    ),
-}
-
-
-def visualize_pose(ax, pose, color, body_model):
+def visualize_pose(ax, pose, color, edges):
     artists = []
-    for start, end in BODY_MODELS[body_model]:
+    for start, end in edges:
         x0, y0, z0 = pose[start]
         x1, y1, z1 = pose[end]
         artist = ax.plot([x0, x1], [y0, y1], [z0, z1], c=color, zdir='x')
@@ -42,7 +31,7 @@ def visualize_pose(ax, pose, color, body_model):
     return artists
 
 
-def prepare_animation(ax, x, x_hat, xlim, ylim, zlim, body_model):
+def prepare_animation(ax, x, x_hat, xlim, ylim, zlim, edges):
     
     def animate(i):
         ax.clear()
@@ -52,8 +41,8 @@ def prepare_animation(ax, x, x_hat, xlim, ylim, zlim, body_model):
         ax.grid(False)
 
         artists = []
-        artists.extend( visualize_pose(ax, x    [i], 'b', body_model) )
-        artists.extend( visualize_pose(ax, x_hat[i], 'r', body_model) )
+        artists.extend( visualize_pose(ax, x    [i], 'b', edges) )
+        artists.extend( visualize_pose(ax, x_hat[i], 'r', edges) )
         return artists
     
     return animate
@@ -63,17 +52,17 @@ def create_gif(
     output_path,
     x,
     x_hat,
+    body_edges,
     xlim=None,
     ylim=None,
     zlim=None,
     fps=30,
-    body_model='hdm05',
 ):
     seq_len = len(x)
 
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    ani_func = prepare_animation(ax, x, x_hat, xlim, ylim, zlim, body_model)
+    ani_func = prepare_animation(ax, x, x_hat, xlim, ylim, zlim, body_edges)
     ani = animation.FuncAnimation(fig, ani_func, seq_len, repeat=False, blit=True)
     ani.save(output_path, fps=fps)
     plt.close()

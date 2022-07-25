@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import body_models
 from datamodules import MoCapDataModule
 
 
@@ -41,7 +42,7 @@ class ResBlock(nn.Module):
 class LitVAE(pl.LightningModule):
     def __init__(
         self,
-        input_dim=93,
+        body_model='hdm05',
         input_length=8,
         latent_dim=256,
     ):
@@ -49,7 +50,8 @@ class LitVAE(pl.LightningModule):
 
         self.save_hyperparameters()
 
-        # input: T x (3*J)
+        self.body_model = body_models.get_by_name(body_model)
+        input_dim = self.body_model.num_joints * self.body_model.num_dimensions
 
         # encoder, decoder
         self.encoder = nn.Sequential(  # input: T x input_dim
@@ -137,22 +139,29 @@ class LitVAE(pl.LightningModule):
         elbo = (kl - recon_loss)
         elbo = elbo.mean()
 
-        self.log_dict({
+        metrics = {
             f'{stage}/elbo': elbo,
             f'{stage}/kl': kl.mean(),
             f'{stage}/recon_loss': recon_loss.mean(),
-        }, prog_bar=True)
+        }
+
+        self.log_dict(metrics, prog_bar=True)
+
+        return metrics
 
         return elbo
 
     def training_step(self, *args, **kwargs):
-        return self._common_step('train', *args, **kwargs)
+        metrics = self._common_step('train', *args, **kwargs)
+        return metrics['train/elbo']
     
     def validation_step(self, *args, **kwargs):
-        return self._common_step('val', *args, **kwargs)
+        metrics = self._common_step('val', *args, **kwargs)
+        return metrics['val/elbo']
     
     def test_step(self, *args, **kwargs):
-        return self._common_step('test', *args, **kwargs)
+        metrics = self._common_step('test', *args, **kwargs)
+        return metrics['test/elbo']
 
     def predict_step(self, batch, batch_idx):
         return self.encode(batch[0])[0]
@@ -196,12 +205,11 @@ def main(args):
         test=args.test_split,
         batch_size=args.batch_size
     )
-    dm.save_hyperparameters()
 
     model = LitVAE(
         input_dim=args.input_dim,
         input_length=args.input_length,
-        latent_dim=args.latent_dim
+        latent_dim=args.latent_dim,
     )
 
     resume = None
