@@ -2,6 +2,7 @@ import argparse
 import math
 from pathlib import Path
 
+from joblib import delayed, Parallel
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer, seed_everything
@@ -13,6 +14,7 @@ import torch.nn.functional as F
 
 import body_models
 from datamodules import MoCapDataModule
+from reconstruct import create_tensor
 
 
 class ResBlock(nn.Module):
@@ -44,14 +46,14 @@ class LitVAE(pl.LightningModule):
         self,
         body_model='hdm05',
         input_length=8,
+        input_fps=12,
         latent_dim=256,
         beta=1,
-        fps=12,
     ):
         super().__init__()
 
         self.beta = beta
-        self.fps = fps
+        self.input_fps = input_fps
         self.save_hyperparameters()
 
         self.body_model = body_models.get_by_name(body_model)
@@ -84,8 +86,7 @@ class LitVAE(pl.LightningModule):
             nn.Conv1d(64, input_dim, kernel_size=1, stride=1, padding=0),  # output: T x 64
         )
 
-        # for the gaussian likelihood
-        self.log_scale = nn.Parameter(torch.Tensor([0.0]))
+        self._preview_samples = []
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=1e-4)
@@ -156,15 +157,41 @@ class LitVAE(pl.LightningModule):
         return metrics
 
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx):
-        if batch_idx == 0:
-            mu, std = self.encode(batch)
-            recon = self.decode(mu)
+        if self.current_epoch != 0:
+            return
 
-            videos = np.stack([
-                create_tensor(x, x_hat, self.body_model.edges)
-                    for x, x_hat in zip(batch, recon)
-                ])  # B x T x 3 x H x W
-            self.logger.experiment.add_video('valid/anim', videos, self.epoch, self.fps)
+        every_n_batches = 7
+        num_samples = 4
+
+        if batch_idx % every_n_batches != 0 or batch_idx > num_samples * every_n_batches:
+            return
+
+        sample = batch[0][:1]  # get first sample
+        self._preview_samples.append(sample)
+
+    def on_validation_end(self):
+        every_n_epochs = 25
+        if self.current_epoch % every_n_epochs != 0:
+            return
+
+        batch = torch.cat(self._preview_samples, dim=0)
+        mu, std = self.encode(batch)
+        recon, _ = self.decode(mu)
+
+        batch = batch.cpu().numpy()
+        recon = recon.cpu().numpy()
+
+        # videos = [create_tensor(x, x_hat, body_model=self.body_model) for x, x_hat in zip(batch, recon)]
+        func = delayed(create_tensor)
+        videos = (func(x, x_hat, body_model=self.body_model) for x, x_hat in zip(batch, recon))
+        videos = Parallel(n_jobs=-1)(videos)
+        videos = [torch.from_numpy(v) for v in videos]
+        videos = torch.stack(videos)  # B x T x 3 x H x W
+        
+        self.logger.experiment.add_video(f'valid/anim', videos, self.current_epoch, self.input_fps)
+
+    def on_train_start(self):
+        self.logger.log_hyperparams(self.hparams, {"val/l2_loss": 0, "val/elbo": 0})
 
     def training_step(self, *args, **kwargs):
         metrics = self._common_step('train', *args, **kwargs)
@@ -172,7 +199,6 @@ class LitVAE(pl.LightningModule):
     
     def validation_step(self, *args, **kwargs):
         metrics = self._common_step('val', *args, **kwargs)
-        self.log('hp_metric', metrics['val/l2_loss'])
         return metrics['val/elbo']
     
     def test_step(self, *args, **kwargs):
@@ -223,8 +249,9 @@ def main(args):
     )
 
     model = LitVAE(
-        input_dim=args.input_dim,
+        body_model=args.body_model,
         input_length=args.input_length,
+        input_fps=args.input_fps,
         latent_dim=args.latent_dim,
         beta=args.beta,
     )
@@ -289,8 +316,9 @@ if __name__ == "__main__":
     parser.add_argument('--valid-split', type=Path, help='validation sequence ids')
     parser.add_argument('--test-split', type=Path, help='test sequence ids')
     
-    parser.add_argument('-s', '--input-dim', type=int, default=93, help='input size (= number of joints * spatial dimensions)')
+    parser.add_argument('-m', '--body-model', default='hdm05', choices=('hdm05', 'pku-mmd'), help='body model')
     parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
+    parser.add_argument('-f', '--input-fps', type=int, default=12, help='sequence fps')
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
     parser.add_argument('--beta', type=float, default=100, help='KL divergence weight')
 
