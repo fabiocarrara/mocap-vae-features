@@ -16,6 +16,7 @@ DATASETS=(
 )
 
 LATENT_DIMS=(8 16 32 64 128 256)
+BETAS=(0 0.01 0.1 1 10 100)
 
 for DATASET in ${DATASETS[@]}; do
 
@@ -29,14 +30,16 @@ for DATASET in ${DATASETS[@]}; do
 
     case $DATASET in
         *hdm05*   )
-            INPUT_DIM=93
+            BODY_MODEL="hdm05"
+            INPUT_FPS=12
             EPOCHS=250
             TRAIN_SPLIT="data/hdm05/2foldsBal_2-class122.txt"
             VALID_SPLIT="data/hdm05/2foldsBal_1-class122.txt"
              TEST_SPLIT="${VALID_SPLIT}"
         ;;
         *pku-mmd* )
-            INPUT_DIM=75
+            BODY_MODEL="pku-mmd"
+            INPUT_FPS=30
             EPOCHS=100
             TRAIN_SPLIT="data/pku-mmd/CS_train_objects_messif-lines.txt"
             VALID_SPLIT="data/pku-mmd/CS_test_objects_messif-lines.txt"
@@ -45,6 +48,7 @@ for DATASET in ${DATASETS[@]}; do
         *) echo "$DATASET: Unsupported splits, skipping ..."; continue ;;
     esac
 
+    for BETA in ${BETAS[@]}; do
     for LATENT_DIM in ${LATENT_DIMS[@]}; do
         python train.py \
             $DATASET \
@@ -53,7 +57,10 @@ for DATASET in ${DATASETS[@]}; do
             --test-split $TEST_SPLIT \
             --epochs $EPOCHS \
             --latent-dim $LATENT_DIM \
-            --input-dim $INPUT_DIM \
-            --input-length $INPUT_LENGTH
+            --body-model $BODY_MODEL \
+            --input-length $INPUT_LENGTH \
+            --input-fps $INPUT_FPS \
+            --beta $BETA
+    done
     done
 done
