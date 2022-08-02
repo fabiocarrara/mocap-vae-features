@@ -148,7 +148,7 @@ def main(args):
     with torch.no_grad():
         for seq_id, (x,) in tqdm(ids_and_samples):
             mu, std = model.encode(x)
-            x_hat = model.decode(mu)
+            x_mu, _ = model.decode(mu)
 
             gif_path = gif_dir / f'{seq_id}.gif'
             create_gif(gif_path, x[0], x_hat[0], **gif_kws)

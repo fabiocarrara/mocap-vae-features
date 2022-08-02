@@ -60,11 +60,11 @@ class LitVAE(pl.LightningModule):
         input_dim = self.body_model.num_joints * self.body_model.num_dimensions
 
         # encoder, decoder
-        self.encoder = nn.Sequential(  # input: T x input_dim
-            nn.Conv1d(input_dim, 64, kernel_size=1, stride=1, padding=0),  # output: T x 64
-            ResBlock(64, 64),  # output: T x 64
-            ResBlock(64, 128, downsample=True),  # output: (T/2) x 128
-            ResBlock(128, 256, downsample=True),  # output: (T/4) x 256
+        self.encoder = nn.Sequential(  # input: input_dim x T
+            nn.Conv1d(input_dim, 64, kernel_size=1, stride=1, padding=0),  # output: 64 x T
+            ResBlock(64, 64),  # output: 64 x T
+            ResBlock(64, 128, downsample=True),  # output: 128 x (T/2)
+            ResBlock(128, 256, downsample=True),  # output: 256 x (T/4)
         )
 
         encoder_output_dim = 256 * input_length // 4
@@ -75,15 +75,16 @@ class LitVAE(pl.LightningModule):
         self.fc_mu  = nn.Linear(encoder_output_dim, latent_dim)
         self.fc_var = nn.Linear(encoder_output_dim, latent_dim)
 
-        self.decoder = nn.Sequential(  # input: 1 x latent_dim
-            nn.Upsample(scale_factor=up_factor(0)),  # output: 2 x latent_dim
-            ResBlock(latent_dim, 256),  # output: 2 x 256
-            nn.Upsample(scale_factor=up_factor(1)),  # output: 4 x 256
-            ResBlock(256, 128),  # output: 4 x 128
-            nn.Upsample(scale_factor=up_factor(2)),  # output: 8 x 128
-            ResBlock(128, 64),  # output: 8 x 64
-            nn.Upsample(scale_factor=last_factor),  # output T x 64
-            nn.Conv1d(64, input_dim, kernel_size=1, stride=1, padding=0),  # output: T x 64
+        self.decoder = nn.Sequential(  # input: latent_dim x 1 
+            nn.Upsample(scale_factor=up_factor(0)),  # output: latent_dim x 2
+            ResBlock(latent_dim, 256),  # output: 256 x 2
+            nn.Upsample(scale_factor=up_factor(1)),  # output: 256 x 4
+            ResBlock(256, 128),  # output: 128 x 4 
+            nn.Upsample(scale_factor=up_factor(2)),  # output: 128 x 8
+            ResBlock(128, 64),  # output: 64 x 8
+            nn.Upsample(scale_factor=last_factor),  # output: 64 x T
+            ResBlock(64, 64),  # output: 64 x T
+            nn.Conv1d(64, 2*input_dim, kernel_size=1, stride=1, padding=0),  # output: 2*input_dim (mean and logstd) x T
         )
 
         self._preview_samples = []
@@ -91,10 +92,9 @@ class LitVAE(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=1e-4)
 
-    def gaussian_likelihood(self, x_hat, logscale, x):
-        scale = torch.exp(logscale)
-        mean = x_hat
-        dist = torch.distributions.Normal(mean, scale)
+    def gaussian_likelihood(self, x_mean, x_logstd, x):
+        x_std = torch.exp(x_logstd)
+        dist = torch.distributions.Normal(x_mean, x_std)
 
         # measure prob of seeing sample under p(x|z)
         log_pxz = dist.log_prob(x)
@@ -118,9 +118,9 @@ class LitVAE(pl.LightningModule):
         return kl
 
     def _common_step(self, stage, batch, batch_idx):
-        x, = batch  # B x T x J x 3
-        x = x.flatten(start_dim=2)  # B x T x (J*3)
-        x = x.swapaxes(1, 2)  # B x (J*3) x T
+        x, = batch  # B x T x J x D
+        x = x.flatten(start_dim=2)  # B x T x (J*D)
+        x = x.swapaxes(1, 2)  # B x (J*D) x T
 
         # encode x to get the mu and variance parameters
         x_encoded = self.encoder(x).flatten(start_dim=1)
@@ -132,11 +132,12 @@ class LitVAE(pl.LightningModule):
         z = q.rsample()
 
         # decoded
-        x_hat = self.decoder(z.unsqueeze(-1))
+        x_hat = self.decoder(z.unsqueeze(-1))  # B x 2*J*D x T
+        x_mean, x_logstd = torch.tensor_split(x_hat, 2, dim=1)  # B x J*D x T,  B x J*D x T
 
         # reconstruction loss
-        recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
-        l2_loss = F.mse_loss(x_hat, x)
+        recon_loss = self.gaussian_likelihood(x_mean, x_logstd, x)
+        l2_loss = F.mse_loss(x_mean, x)
 
         # kl
         kl = self.kl_divergence(z, mu, std)
@@ -225,13 +226,18 @@ class LitVAE(pl.LightningModule):
         return z
 
     def decode(self, z):
-        z = z.unsqueeze(-1)
-        x_hat = self.decoder(z)
-        x_hat = x_hat.swapaxes(1, 2)
-        n_batches, n_frames, n_coords = x_hat.shape
-        n_joints = n_coords // 3
-        x_hat = x_hat.reshape(n_batches, n_frames, n_joints, 3)
-        return x_hat
+        z = z.unsqueeze(-1)  # B x latent_dim x 1
+        x_hat = self.decoder(z)  # B x (2*J*D) x T
+        x_hat = x_hat.swapaxes(1, 2)  # B x T x (2*J*D)
+        x_mean, x_logstd = torch.tensor_split(x_hat, 2, dim=2)  # B x T x J*D,  B x T x J*D
+
+        n_batches, n_frames, n_coords = x_mean.shape
+        n_joints = self.body_model.num_joints
+        n_dims = self.body_model.num_dimensions
+
+        x_mean = x_mean.reshape(n_batches, n_frames, n_joints, n_dims)
+        x_logstd = x_logstd.reshape(n_batches, n_frames, n_joints, n_dims)
+        return x_mean, x_logstd
 
 
 def main(args):
