@@ -11,7 +11,6 @@ from tqdm import tqdm
 
 import body_models
 from datamodules import MoCapDataModule
-from train import LitVAE
 
 
 def visualize_pose(ax, pose, color, edges):
@@ -108,6 +107,8 @@ def create_tensor(
 
 
 def main(args):
+    from train import LitVAE
+
     ckpt = (args.run_dir / 'checkpoints').glob('epoch*.ckpt')
     ckpt = next(iter(ckpt))
 
