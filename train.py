@@ -7,6 +7,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.loggers import TensorBoardLogger
 import seaborn as sns
 import torch
 import torch.nn as nn
@@ -243,7 +244,7 @@ class LitVAE(pl.LightningModule):
 def main(args):
     seed_everything(127, workers=True)
 
-    root_dir = Path('runs') / args.data_path.stem
+    root_dir = Path('runs') / args.data_path.stem / f'beta={args.beta}' / f'dim={args.latent_dim}'
     root_dir.mkdir(parents=True, exist_ok=True)
 
     dm = MoCapDataModule(
@@ -268,12 +269,15 @@ def main(args):
         ckpts = sorted(ckpts, reverse=True, key=lambda p: p.stat().st_mtime)
         resume = ckpts[0] if ckpts else None
 
+    logger = TensorBoardLogger(root_dir, default_hp_metric=False)
     trainer = Trainer(
         default_root_dir=root_dir,
         resume_from_checkpoint=resume,
         max_epochs=args.epochs,
+        logger=logger,
         gpus=1,
         deterministic=True,
+        num_sanity_val_steps=0,
         log_every_n_steps=5,
         terminate_on_nan=True,
         callbacks=[
