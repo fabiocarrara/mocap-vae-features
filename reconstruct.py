@@ -5,6 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_agg as plt_backend_agg
 import matplotlib.animation as animation
+import numpy as np
 import torch
 from tqdm import tqdm
 
@@ -74,26 +75,35 @@ def _figure_to_numpy(figure):
 def create_tensor(
     x,
     x_hat,
-    body_edges,
+    body_model=None,
+    body_edges=None,
     xlim=None,
     ylim=None,
     zlim=None,
 ):
+
+    if body_model:
+        body_edges = body_model.edges
+        xlim = body_model.xlim
+        ylim = body_model.ylim
+        zlim = body_model.zlim
+
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    ax.set(xlim=xlim, xticks=[],
-           ylim=ylim, yticks=[],
-           zlim=zlim, zticks=[])
-    ax.grid(False)
 
     images = []
     for xi, xhi in zip(x, x_hat):
         ax.clear()
+        ax.set(xlim=xlim, xticks=[],
+               ylim=ylim, yticks=[],
+               zlim=zlim, zticks=[])
+        ax.grid(False)
         visualize_pose(ax, xi, 'b', body_edges)
         visualize_pose(ax, xhi, 'r', body_edges)
         image = _figure_to_numpy(fig)
         images.append(image)
     
+    plt.close()
     return np.stack(images)
 
 
