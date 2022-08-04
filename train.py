@@ -91,7 +91,17 @@ class LitVAE(pl.LightningModule):
         self._preview_samples = []
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=25)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": lr_scheduler,
+                "monitor": "val/elbo",
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }
 
     def gaussian_likelihood(self, x_mean, x_logstd, x):
         x_std = torch.exp(x_logstd)
@@ -172,7 +182,7 @@ class LitVAE(pl.LightningModule):
         self._preview_samples.append(sample)
 
     def on_validation_end(self):
-        every_n_epochs = 25
+        every_n_epochs = 50
         if self.current_epoch % every_n_epochs != 0:
             return
 
