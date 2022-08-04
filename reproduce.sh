@@ -15,8 +15,8 @@ DATASETS=(
     data/pku-mmd/actions_singlesubject-segment20_shift4_initialshift0-coords_normPOS-fps30.data
 )
 
-LATENT_DIMS=(8 16 32 64 128 256)
-BETAS=(0 0.01 0.1 1 10 100)
+LATENT_DIMS=(256 128 64 32 16 8)
+BETAS=(0.1 1 0 0.01 10)
 
 for DATASET in ${DATASETS[@]}; do
 
@@ -32,7 +32,7 @@ for DATASET in ${DATASETS[@]}; do
         *hdm05*   )
             BODY_MODEL="hdm05"
             INPUT_FPS=12
-            EPOCHS=250
+            EPOCHS=1000
             TRAIN_SPLIT="data/hdm05/2foldsBal_2-class122.txt"
             VALID_SPLIT="data/hdm05/2foldsBal_1-class122.txt"
              TEST_SPLIT="${VALID_SPLIT}"
@@ -40,7 +40,7 @@ for DATASET in ${DATASETS[@]}; do
         *pku-mmd* )
             BODY_MODEL="pku-mmd"
             INPUT_FPS=30
-            EPOCHS=100
+            EPOCHS=500
             TRAIN_SPLIT="data/pku-mmd/CS_train_objects_messif-lines.txt"
             VALID_SPLIT="data/pku-mmd/CS_test_objects_messif-lines.txt"
              TEST_SPLIT="${VALID_SPLIT}"
