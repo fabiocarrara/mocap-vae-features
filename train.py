@@ -6,7 +6,7 @@ from joblib import delayed, Parallel
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 import seaborn as sns
 import torch
@@ -289,8 +289,8 @@ def main(args):
         deterministic=True,
         num_sanity_val_steps=0,
         log_every_n_steps=5,
-        terminate_on_nan=True,
         callbacks=[
+            EarlyStopping(monitor='val/l2_loss', patience=50),
             ModelCheckpoint(monitor='val/elbo', save_last=True),
             LearningRateMonitor(logging_interval='step'),
         ]
