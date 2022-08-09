@@ -4,15 +4,13 @@ set -e
 
 DATASETS=(
     # HDM05 normalized
-    data/hdm05/class130-actions-segment120_shift16-coords_normPOS-fps12.data
-    data/hdm05/class130-actions-segment80_shift16-coords_normPOS-fps12.data
-    data/hdm05/class130-actions-segment40_shift20-coords_normPOS-fps12.data
-
+    data/actions/hdm05/class130-actions-segment120_shift16-coords_normPOS-fps12.data
+    data/actions/hdm05/class130-actions-segment80_shift16-coords_normPOS-fps12.data
+    data/actions/hdm05/class130-actions-segment40_shift20-coords_normPOS-fps12.data
     # HDM05 non-normalized
-    data/hdm05/class130-actions_segment80_shift16-coords-fps12.data
-
+    data/actions/hdm05/class130-actions_segment80_shift16-coords-fps12.data
     # PKU-MMD normalized
-    data/pku-mmd/actions_singlesubject-segment20_shift4_initialshift0-coords_normPOS-fps30.data
+    data/actions/pku-mmd/actions_singlesubject-segment20_shift4_initialshift0-coords_normPOS-fps30.data
 )
 
 LATENT_DIMS=(256 128 64 32 16 8)
