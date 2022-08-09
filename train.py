@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 
 from joblib import delayed, Parallel
+import hydra
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer, seed_everything
@@ -251,11 +252,11 @@ class LitVAE(pl.LightningModule):
         return x_mean, x_logstd
 
 
+@hydra.main(version_base=None, config_path='experiments', config_name='config')
 def main(args):
     seed_everything(127, workers=True)
 
-    root_dir = Path('runs') / args.data_path.stem / f'beta={args.beta}' / f'dim={args.latent_dim}'
-    root_dir.mkdir(parents=True, exist_ok=True)
+    root_dir = Path.cwd()
 
     dm = MoCapDataModule(
         args.data_path,
@@ -330,7 +331,7 @@ def main(args):
     pd.DataFrame( dm.test_ids).to_csv(run_dir /  'test_ids.txt', header=False, index=False)
 
 
-if __name__ == "__main__":
+def argparse_cli():
     parser = argparse.ArgumentParser(description='Train MoCap VAE')
     parser.add_argument('data_path', type=Path, help='data path')
     parser.add_argument('--train-split', type=Path, help='train sequence ids')
@@ -349,3 +350,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(args)
+
+
+if __name__ == "__main__":
+    main()

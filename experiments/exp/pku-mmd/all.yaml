@@ -1,0 +1,7 @@
+# @package _global_
+defaults:
+ - pku-mmd/common
+
+train_split: null
+valid_split: null
+test_split: null

@@ -1,0 +1,7 @@
+# @package _global_
+defaults:
+ - pku-mmd/common
+ 
+train_split: ${hydra:runtime.cwd}/data/sequences/PKU-MMD/meta/sequences-CS-train.txt
+valid_split: ${hydra:runtime.cwd}/data/sequences/PKU-MMD/meta/sequences-CS-test.txt
+test_split: ${valid_split}

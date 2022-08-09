@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - _self_
+  - hdm05/common@_global_
+ 
+train_split: ${hydra:runtime.cwd}/data/sequences/HDM05/meta/sequences-class122-split20_80-fold1.txt
+valid_split: ${hydra:runtime.cwd}/data/sequences/HDM05/meta/sequences-class122-split20_80-fold2.txt
+test_split: ${valid_split}

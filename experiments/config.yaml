@@ -1,0 +1,22 @@
+defaults:
+  - _self_
+  - exp: ???
+
+beta: ???
+latent_dim: ???
+
+resume: false
+
+hydra:
+  run:
+    dir: ./runs/${hydra.runtime.choices.exp}/${hydra.job.override_dirname}
+  sweep:
+    dir: ./runs
+    subdir: ${hydra.runtime.choices.exp}/${hydra.job.override_dirname}
+  job:
+    chdir: true
+    config:
+      override_dirname:
+        exclude_keys:
+          - resume
+          - exp

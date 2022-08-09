@@ -1,0 +1,9 @@
+# @package _global_
+data_path: ${hydra:runtime.cwd}/data/sequences/HDM05/class130-sequences-segment80_shift16-coords_normPOS-fps12.data
+
+body_model: hdm05
+input_length: 8
+input_fps: 12
+
+batch_size: 512
+epochs: 1000

@@ -1,0 +1,9 @@
+# @package _global_
+data_path: ${hydra:runtime.cwd}/data/sequences/PKU-MMD/sequences_singlesubject-segment24_shift4.8_initialshift0-coords_normPOS-fps10.data
+
+body_model: pku-mmd
+input_length: 8
+input_fps: 10
+
+batch_size: 512
+epochs: 500
