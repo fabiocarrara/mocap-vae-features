@@ -254,9 +254,12 @@ class LitVAE(pl.LightningModule):
 
 @hydra.main(version_base=None, config_path='experiments', config_name='config')
 def main(args):
-    seed_everything(127, workers=True)
-
     root_dir = Path.cwd()
+    if (root_dir / 'lightning_logs' / 'version_0').exists() and not args.resume:
+        print("Skipping existing run.")
+        return 
+
+    seed_everything(127, workers=True)
 
     dm = MoCapDataModule(
         args.data_path,
