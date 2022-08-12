@@ -300,11 +300,7 @@ def main(args):
 
     last_ckpt_path = log_dir / 'checkpoints' / 'last.ckpt'
     resume_ckpt = last_ckpt_path if args.resume else None
-
-    try:
-        trainer.fit(model, dm, ckpt_path=resume_ckpt)
-    except ValueError as e:
-        print('Something\'s wrong happened while fitting:', e)
+    trainer.fit(model, dm, ckpt_path=resume_ckpt)
 
     trainer.test(ckpt_path='best', datamodule=dm)
 
