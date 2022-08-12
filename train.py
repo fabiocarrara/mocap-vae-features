@@ -255,9 +255,12 @@ class LitVAE(pl.LightningModule):
 @hydra.main(version_base=None, config_path='experiments', config_name='config')
 def main(args):
     root_dir = Path.cwd()
-    if (root_dir / 'lightning_logs' / 'version_0').exists() and not args.resume:
+    log_dir = root_dir / 'lightning_logs' / 'version_0'
+    predictions_file = log_dir / 'predictions.csv'
+
+    if predictions_file.exists():
         print("Skipping existing run.")
-        return 
+        return
 
     seed_everything(127, workers=True)
 
@@ -277,16 +280,9 @@ def main(args):
         beta=args.beta,
     )
 
-    resume = None
-    if args.resume:
-        ckpts = root_dir.glob('version_*/checkpoints/*.ckpt')
-        ckpts = sorted(ckpts, reverse=True, key=lambda p: p.stat().st_mtime)
-        resume = ckpts[0] if ckpts else None
-
     logger = TensorBoardLogger(root_dir, default_hp_metric=False)
     trainer = Trainer(
         default_root_dir=root_dir,
-        resume_from_checkpoint=resume,
         max_epochs=args.epochs,
         logger=logger,
         accelerator='gpu',
@@ -301,8 +297,12 @@ def main(args):
         ]
     )
 
+
+    last_ckpt_path = log_dir / 'checkpoints' / 'last.ckpt'
+    resume_ckpt = last_ckpt_path if args.resume else None
+
     try:
-        trainer.fit(model, dm)
+        trainer.fit(model, dm, ckpt_path=resume_ckpt)
     except ValueError as e:
         print('Something\'s wrong happened while fitting:', e)
 
