@@ -24,7 +24,7 @@ class ResBlock(nn.Module):
         super(ResBlock, self).__init__()
 
         stride = 2 if downsample else 1
-        
+
         self.module = nn.Sequential(
             nn.BatchNorm1d(in_channels),
             nn.ReLU(),
@@ -38,7 +38,7 @@ class ResBlock(nn.Module):
             self.shortcut = nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1)
         else:
             self.shortcut = nn.Identity()
-    
+
     def forward(self, x):
         return self.module(x) + self.shortcut(x)
 
@@ -77,11 +77,11 @@ class LitVAE(pl.LightningModule):
         self.fc_mu  = nn.Linear(encoder_output_dim, latent_dim)
         self.fc_var = nn.Linear(encoder_output_dim, latent_dim)
 
-        self.decoder = nn.Sequential(  # input: latent_dim x 1 
+        self.decoder = nn.Sequential(  # input: latent_dim x 1
             nn.Upsample(scale_factor=up_factor(0)),  # output: latent_dim x 2
             ResBlock(latent_dim, 256),  # output: 256 x 2
             nn.Upsample(scale_factor=up_factor(1)),  # output: 256 x 4
-            ResBlock(256, 128),  # output: 128 x 4 
+            ResBlock(256, 128),  # output: 128 x 4
             nn.Upsample(scale_factor=up_factor(2)),  # output: 128 x 8
             ResBlock(128, 64),  # output: 64 x 8
             nn.Upsample(scale_factor=last_factor),  # output: 64 x T
@@ -200,7 +200,7 @@ class LitVAE(pl.LightningModule):
         videos = Parallel(n_jobs=-1)(videos)
         videos = [torch.from_numpy(v) for v in videos]
         videos = torch.stack(videos)  # B x T x 3 x H x W
-        
+
         self.logger.experiment.add_video(f'valid/anim', videos, self.current_epoch, self.input_fps)
 
     def on_train_start(self):
@@ -209,11 +209,11 @@ class LitVAE(pl.LightningModule):
     def training_step(self, *args, **kwargs):
         metrics = self._common_step('train', *args, **kwargs)
         return metrics['train/elbo']
-    
+
     def validation_step(self, *args, **kwargs):
         metrics = self._common_step('val', *args, **kwargs)
         return metrics['val/elbo']
-    
+
     def test_step(self, *args, **kwargs):
         metrics = self._common_step('test', *args, **kwargs)
         return metrics['test/elbo']
@@ -307,7 +307,7 @@ def main(args):
         print('Something\'s wrong happened while fitting:', e)
 
     trainer.test(ckpt_path='best', datamodule=dm)
-    
+
     predictions = trainer.predict(ckpt_path='best', datamodule=dm)
     predictions = torch.concat(predictions, 0).numpy()
     predictions = pd.DataFrame(predictions, index=dm.predict_ids)
@@ -321,13 +321,13 @@ def main(args):
     # predictions in .data format
     predictions_data_file = run_dir / 'predictions.data'
     predictions.index = predictions.index.str.rsplit('_', 1, expand=True).rename(['seq_id', 'frame'])
-    
+
     with open(predictions_data_file, 'w') as f:
         for seq_id, group in predictions.groupby(level='seq_id'):
             print(f'#objectKey messif.objects.keys.AbstractObjectKey {seq_id}', file=f)
             print(f'{len(group)};mcdr.objects.ObjectMocapPose', file=f)
             print(group.to_csv(index=False, header=False), end='', file=f)
-    
+
     # segments ids
     pd.DataFrame(dm.train_ids).to_csv(run_dir / 'train_ids.txt', header=False, index=False)
     pd.DataFrame(dm.valid_ids).to_csv(run_dir / 'valid_ids.txt', header=False, index=False)
@@ -340,7 +340,7 @@ def argparse_cli():
     parser.add_argument('--train-split', type=Path, help='train sequence ids')
     parser.add_argument('--valid-split', type=Path, help='validation sequence ids')
     parser.add_argument('--test-split', type=Path, help='test sequence ids')
-    
+
     parser.add_argument('-m', '--body-model', default='hdm05', choices=('hdm05', 'pku-mmd'), help='body model')
     parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
     parser.add_argument('-f', '--input-fps', type=int, default=12, help='sequence fps')
