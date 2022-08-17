@@ -170,13 +170,13 @@ class LitVAE(pl.LightningModule):
         return metrics
 
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx):
-        if self.current_epoch != 0:
-            return
-
         every_n_batches = 7
         num_samples = 4
 
-        if batch_idx % every_n_batches != 0 or batch_idx > num_samples * every_n_batches:
+        if len(self._preview_samples) == num_samples:
+            return
+
+        if batch_idx % every_n_batches != 0:
             return
 
         sample = batch[0][:1]  # get first sample
@@ -280,7 +280,7 @@ def main(args):
         beta=args.beta,
     )
 
-    logger = TensorBoardLogger(root_dir, default_hp_metric=False)
+    logger = TensorBoardLogger(root_dir, version=0, default_hp_metric=False)
     trainer = Trainer(
         default_root_dir=root_dir,
         max_epochs=args.epochs,
@@ -296,7 +296,6 @@ def main(args):
             LearningRateMonitor(logging_interval='step'),
         ]
     )
-
 
     last_ckpt_path = log_dir / 'checkpoints' / 'last.ckpt'
     resume_ckpt = last_ckpt_path if args.resume else None
