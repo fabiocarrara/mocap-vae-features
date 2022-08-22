@@ -298,8 +298,13 @@ def main(args):
     )
 
     last_ckpt_path = log_dir / 'checkpoints' / 'last.ckpt'
-    resume_ckpt = last_ckpt_path if args.resume else None
-    trainer.fit(model, dm, ckpt_path=resume_ckpt)
+    resume_ckpt = last_ckpt_path if args.resume and last_ckpt_path.exists() else None
+    try:
+        trainer.fit(model, dm, ckpt_path=resume_ckpt)
+    except ValueError as e:
+        print('Train terminated by error:', e)
+        with open('terminated_by_error.txt', 'w') as f:
+            f.write(str(e))
 
     trainer.test(ckpt_path='best', datamodule=dm)
 
