@@ -5,14 +5,17 @@ defaults:
 beta: ???
 latent_dim: ???
 
+force: false
 resume: false
+skip_train: false
 additional_data: []
+runs_dir: runs
 
 hydra:
   run:
-    dir: ./runs/${hydra.runtime.choices.exp}/${hydra.job.override_dirname}
+    dir: ./${runs_dir}/${hydra.runtime.choices.exp}/${hydra.job.override_dirname}
   sweep:
-    dir: ./runs
+    dir: ./${runs_dir}
     subdir: ${hydra.runtime.choices.exp}/${hydra.job.override_dirname}
   job:
     chdir: true
@@ -21,3 +24,6 @@ hydra:
         exclude_keys:
           - resume
           - exp
+          - skip_train
+          - force
+          - runs_dir

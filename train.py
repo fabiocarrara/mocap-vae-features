@@ -348,16 +348,22 @@ def main(args):
         ]
     )
 
-    last_ckpt_path = log_dir / 'checkpoints' / 'last.ckpt'
-    resume_ckpt = last_ckpt_path if args.resume and last_ckpt_path.exists() else None
-    try:
+    if not args.skip_train:
+        last_ckpt_path = log_dir / 'checkpoints' / 'last.ckpt'
+        resume_ckpt = last_ckpt_path if args.resume and last_ckpt_path.exists() else None
         trainer.fit(model, dm, ckpt_path=resume_ckpt)
-    except ValueError as e:
-        print('Train terminated by error:', e)
-        with open('terminated_by_error.txt', 'w') as f:
-            f.write(str(e))
+        try:
+            trainer.fit(model, dm, ckpt_path=resume_ckpt)
+        except ValueError as e:
+            print('Train terminated by error:', e)
+            with open('terminated_by_error.txt', 'w') as f:
+                f.write(str(e))
+        ckpt_path = 'best'
+    else:
+        ckpts = (log_dir / 'checkpoints').glob('epoch=*.ckpt')
+        ckpt_path = max(ckpts, key=lambda x: int(x.stem.split('-')[0].split('=')[1]))
 
-    trainer.test(ckpt_path='best', datamodule=dm)
+    trainer.test(model, ckpt_path=ckpt_path, datamodule=dm)
 
     # predictions in .csv and .data format
     if predict(trainer, model, ckpt_path, dm):
@@ -390,6 +396,7 @@ def argparse_cli():
     parser.add_argument('-b', '--batch-size', type=int, default=512, help='batch size')
     parser.add_argument('-e', '--epochs', type=int, default=250, help='number of training epochs')
     parser.add_argument('-r', '--resume', default=False, action='store_true', help='resume training')
+    parser.add_argument('-s', '--skip-train', default=False, action='store_true', help='perform prediction only')
 
     parser.add_argument('-a', '--additional-data-path', type=Path, nargs='+', help='additional data on which prediction is run after training')
     parser.add_argument('--additional-train-split', type=Path, nargs='+', help='additional train sequence ids')
