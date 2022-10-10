@@ -52,11 +52,13 @@ class LitVAE(pl.LightningModule):
         input_fps=12,
         latent_dim=256,
         beta=1,
+        learning_rate=1e-4,
     ):
         super().__init__()
 
         self.beta = beta
         self.input_fps = input_fps
+        self.learning_rate = learning_rate
         self.save_hyperparameters()
 
         self.body_model = body_models.get_by_name(body_model)
@@ -93,8 +95,7 @@ class LitVAE(pl.LightningModule):
         self._preview_samples = []
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
-        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=25)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -279,6 +280,7 @@ def main(args):
         input_fps=args.input_fps,
         latent_dim=args.latent_dim,
         beta=args.beta,
+        learning_rate=args.learning_rate,
     )
 
     logger = TensorBoardLogger(root_dir, version=0, default_hp_metric=False)
