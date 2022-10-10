@@ -200,5 +200,12 @@ if __name__ == "__main__":
     dm.prepare_data()
     dm.setup()
 
+    minX, minY, minZ = dm.predict_dataset.tensors[0].numpy().min(axis=(0, 1, 2))
+    maxX, maxY, maxZ = dm.predict_dataset.tensors[0].numpy().max(axis=(0, 1, 2))
+
+    print(f'xlim=({minX}, {maxX})')
+    print(f'ylim=({minY}, {maxY})')
+    print(f'zlim=({minZ}, {maxZ})')
+
     for x in dm.train_dataloader():
         breakpoint()
