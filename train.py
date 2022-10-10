@@ -94,6 +94,7 @@ class LitVAE(pl.LightningModule):
             nn.Conv1d(64, 2*input_dim, kernel_size=1, stride=1, padding=0),  # output: 2*input_dim (mean and logstd) x T
         )
 
+        self._do_videos = False
         self._preview_samples = []
 
     def configure_optimizers(self):
@@ -186,26 +187,27 @@ class LitVAE(pl.LightningModule):
         sample = batch[0][:1]  # get first sample
         self._preview_samples.append(sample)
 
-    def on_validation_end(self):
-        every_n_epochs = 50
-        if self.current_epoch % every_n_epochs != 0:
-            return
+    def on_validation_start(self):
+        every_n_epochs = 1
+        self._do_videos = self.current_epoch % every_n_epochs == 0
 
-        batch = torch.cat(self._preview_samples, dim=0)
-        mu, std = self.encode(batch)
-        recon, _ = self.decode(mu)
+    def on_validation_epoch_end(self):
+        if self._do_videos:
+            batch = torch.cat(self._preview_samples, dim=0)
+            mu, std = self.encode(batch)
+            recon, _ = self.decode(mu)
 
-        batch = batch.cpu().numpy()
-        recon = recon.cpu().numpy()
+            batch = batch.cpu().numpy()
+            recon = recon.cpu().numpy()
 
-        # videos = [create_tensor(x, x_hat, body_model=self.body_model) for x, x_hat in zip(batch, recon)]
-        func = delayed(create_tensor)
-        videos = (func(x, x_hat, body_model=self.body_model) for x, x_hat in zip(batch, recon))
-        videos = Parallel(n_jobs=-1)(videos)
-        videos = [torch.from_numpy(v) for v in videos]
-        videos = torch.stack(videos)  # B x T x 3 x H x W
+            # videos = [create_tensor(x, x_hat, body_model=self.body_model) for x, x_hat in zip(batch, recon)]
+            func = delayed(create_tensor)
+            videos = (func(x, x_hat, body_model=self.body_model) for x, x_hat in zip(batch, recon))
+            videos = Parallel(n_jobs=-1)(videos)
+            videos = [torch.from_numpy(v) for v in videos]
+            videos = torch.stack(videos)  # B x T x 3 x H x W
 
-        self.logger.experiment.add_video(f'valid/anim', videos, self.current_epoch, self.input_fps)
+            self.logger.experiment.add_video(f'val/anim', videos, self.current_epoch, self.input_fps)
 
     def on_train_start(self):
         self.logger.log_hyperparams(self.hparams, {"val/l2_loss": 0, "val/elbo": 0})
