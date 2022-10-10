@@ -5,6 +5,7 @@ from pathlib import Path
 
 from joblib import delayed, Parallel
 import hydra
+import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer, seed_everything
@@ -14,10 +15,12 @@ import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
 import body_models
 from datamodules import MoCapDataModule
 from reconstruct import create_tensor
+import evaluate
 
 
 class ResBlock(nn.Module):
@@ -95,6 +98,7 @@ class LitVAE(pl.LightningModule):
         )
 
         self._do_videos = False
+        self._do_retrieval_eval = False
         self._preview_samples = []
 
     def configure_optimizers(self):
@@ -103,7 +107,7 @@ class LitVAE(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": lr_scheduler,
-                "monitor": "val/elbo",
+                "monitor": "val/1nn_accuracy/dm0",
                 "interval": "epoch",
                 "frequency": 1,
             },
@@ -170,7 +174,7 @@ class LitVAE(pl.LightningModule):
             f'{stage}/l2_loss': l2_loss.mean(),
         }
 
-        self.log_dict(metrics, prog_bar=True)
+        self.log_dict(metrics, prog_bar=(stage != 'train'))
 
         return metrics
 
@@ -190,8 +194,62 @@ class LitVAE(pl.LightningModule):
     def on_validation_start(self):
         every_n_epochs = 1
         self._do_videos = self.current_epoch % every_n_epochs == 0
+        self._do_retrieval_eval = self.current_epoch % every_n_epochs == 0
+
+    def _retrieval_validation(self):
+        trainer = self.trainer
+
+        def _get_info(ids):
+            x_info = pd.DataFrame(ids)[0].str.split('_', expand=True)
+            x_info.columns = ['parentSeqID', 'classID', 'offsetWithinParentSeq', 'actionLength', 'frameID']
+            x_info = x_info.groupby(['parentSeqID', 'classID', 'offsetWithinParentSeq', 'actionLength'])
+            x_info = x_info.groups
+            return x_info
+
+        def _extract(dl, info):
+            # x = trainer.predict(self, dl)  # this breaks model device placement
+            x = [self.encode(batch[0].cuda())[0] for batch in tqdm(dl, leave=False)]
+            x = torch.vstack(x)
+            x = F.normalize(x)
+            x = x.cpu().numpy()
+
+            x_actions = [x[indices] for group, indices in info.items()]
+            x_labels = np.array([group[1] for group in info.keys()])
+
+            return x_actions, x_labels
+
+        accuracies = []
+
+        for i, dm in enumerate(self.extra_dms):
+            db_dl = dm.train_dataloader()
+            q_dl = dm.val_dataloader()
+
+            db_info = _get_info(dm.train_ids)
+            q_info = _get_info(dm.valid_ids)
+
+            db_actions, db_labels = _extract(db_dl, db_info)
+            q_actions, q_labels = _extract(q_dl, q_info)
+
+            accuracy = evaluate.one_nn_accuracy(
+                q_actions, q_labels,
+                db_actions, db_labels,
+                approx=True,
+                exclude_first_neighbor=False,
+            )
+            accuracies.append(accuracy)
+
+        return accuracies
 
     def on_validation_epoch_end(self):
+        if self._do_retrieval_eval:
+            mean_1nn_accuracies = self._retrieval_validation()
+
+            # Cannot use self.log_dict() here..
+            acc_dict = {f'val/1nn_accuracy/dm{i}': v for i, v in enumerate(mean_1nn_accuracies)}
+            self.log_dict(acc_dict, on_step=False, on_epoch=True)
+            # for i, v in enumerate(mean_1nn_accuracies):
+            #     self.logger.experiment.add_scalar(f'val/1nn_accuracy/dm{i}', v)
+
         if self._do_videos:
             batch = torch.cat(self._preview_samples, dim=0)
             mu, std = self.encode(batch)
@@ -210,7 +268,7 @@ class LitVAE(pl.LightningModule):
             self.logger.experiment.add_video(f'val/anim', videos, self.current_epoch, self.input_fps)
 
     def on_train_start(self):
-        self.logger.log_hyperparams(self.hparams, {"val/l2_loss": 0, "val/elbo": 0})
+        self.logger.log_hyperparams(self.hparams, {"val/l2_loss": 0, "val/elbo": 0, 'val/1nn_accuracy/dm0': 0})
 
     def training_step(self, *args, **kwargs):
         metrics = self._common_step('train', *args, **kwargs)
@@ -344,8 +402,8 @@ def main(args):
         num_sanity_val_steps=0,
         log_every_n_steps=5,
         callbacks=[
-            EarlyStopping(monitor='val/l2_loss', patience=50),
-            ModelCheckpoint(monitor='val/elbo', save_last=True),
+            EarlyStopping(monitor='val/1nn_accuracy/dm0', mode='max', patience=75),
+            ModelCheckpoint(monitor='val/1nn_accuracy/dm0', mode='max', save_last=True),
             LearningRateMonitor(logging_interval='step'),
         ]
     )
