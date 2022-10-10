@@ -393,7 +393,7 @@ def argparse_cli():
     parser.add_argument('-i', '--input-length', type=int, default=512, help='input sequence length')
     parser.add_argument('-f', '--input-fps', type=int, default=12, help='sequence fps')
     parser.add_argument('-d', '--latent-dim', type=int, default=32, help='VAE code size')
-    parser.add_argument('--beta', type=float, default=100, help='KL divergence weight')
+    parser.add_argument('--beta', type=float, default=1, help='KL divergence weight')
 
     parser.add_argument('-b', '--batch-size', type=int, default=512, help='batch size')
     parser.add_argument('-e', '--epochs', type=int, default=250, help='number of training epochs')
