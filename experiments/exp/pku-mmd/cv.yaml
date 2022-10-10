@@ -5,3 +5,9 @@ defaults:
 train_split: ${hydra:runtime.cwd}/data/sequences/PKU-MMD/meta/sequences-CV-train.txt
 valid_split: ${hydra:runtime.cwd}/data/sequences/PKU-MMD/meta/sequences-CV-test.txt
 test_split: ${valid_split}
+
+additional_train_split:
+  - ${hydra:runtime.cwd}/data/actions/pku-mmd/CV_train_actions.txt
+additional_valid_split:
+  - ${hydra:runtime.cwd}/data/actions/pku-mmd/CV_test_actions.txt
+additional_test_split: ${additional_valid_split}

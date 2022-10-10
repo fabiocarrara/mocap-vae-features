@@ -53,6 +53,7 @@ class LitVAE(pl.LightningModule):
         latent_dim=256,
         beta=1,
         learning_rate=1e-4,
+        extra_dms=None,
     ):
         super().__init__()
 
@@ -60,6 +61,7 @@ class LitVAE(pl.LightningModule):
         self.input_fps = input_fps
         self.learning_rate = learning_rate
         self.save_hyperparameters()
+        self.extra_dms = extra_dms
 
         self.body_model = body_models.get_by_name(body_model)
         input_dim = self.body_model.num_joints * self.body_model.num_dimensions
@@ -254,15 +256,40 @@ class LitVAE(pl.LightningModule):
         return x_mean, x_logstd
 
 
+def predict(trainer, model, ckpt_path, dm, prefix='', force=False):
+    run_dir = Path(trainer.log_dir)
+
+    predictions_csv = run_dir / f'{prefix}predictions.csv.gz'
+    predictions_data_file = run_dir / f'{prefix}predictions.data.gz'
+
+    if predictions_csv.exists() and not force:
+        print('Skipping prediction. File exists:', predictions_csv.stem)
+        return False
+
+    print(f'Predicting: {prefix}')
+
+    # prediction csv
+    predictions = trainer.predict(model, ckpt_path=ckpt_path, datamodule=dm)
+    predictions = torch.concat(predictions, 0).numpy()
+    predictions = pd.DataFrame(predictions, index=dm.predict_ids)
+    predictions.index.name = 'id'
+    predictions.to_csv(predictions_csv)
+
+    # predictions in .data format
+    predictions.index = predictions.index.str.rsplit('_', 1, expand=True).rename(['seq_id', 'frame'])
+    with gzip.open(predictions_data_file, 'wt', encoding='utf8') as f:
+        for seq_id, group in predictions.groupby(level='seq_id'):
+            print(f'#objectKey messif.objects.keys.AbstractObjectKey {seq_id}', file=f)
+            print(f'{len(group)};mcdr.objects.ObjectMocapPose', file=f)
+            print(group.to_csv(index=False, header=False), end='', file=f)
+
+    return True
+
+
 @hydra.main(version_base=None, config_path='experiments', config_name='config')
 def main(args):
     root_dir = Path.cwd()
     log_dir = root_dir / 'lightning_logs' / 'version_0'
-    predictions_file = log_dir / 'predictions.csv'
-
-    if predictions_file.exists():
-        print("Skipping existing run.")
-        return
 
     seed_everything(127, workers=True)
 
@@ -274,6 +301,26 @@ def main(args):
         batch_size=args.batch_size
     )
 
+    extra_dms = [
+        MoCapDataModule(
+            path,
+            train=train,
+            valid=valid,
+            test=test,
+            batch_size=args.batch_size,
+            shuffle_train=False,
+        ) for path, train, valid, test in zip(
+            args.additional_data_path,
+            args.additional_train_split,
+            args.additional_valid_split,
+            args.additional_test_split,
+        )
+    ]
+
+    for edm in extra_dms:
+        edm.prepare_data()
+        edm.setup()
+
     model = LitVAE(
         body_model=args.body_model,
         input_length=args.input_length,
@@ -281,6 +328,7 @@ def main(args):
         latent_dim=args.latent_dim,
         beta=args.beta,
         learning_rate=args.learning_rate,
+        extra_dms=extra_dms,
     )
 
     logger = TensorBoardLogger(root_dir, version=0, default_hp_metric=False)
@@ -311,30 +359,19 @@ def main(args):
 
     trainer.test(ckpt_path='best', datamodule=dm)
 
-    predictions = trainer.predict(ckpt_path='best', datamodule=dm)
-    predictions = torch.concat(predictions, 0).numpy()
-    predictions = pd.DataFrame(predictions, index=dm.predict_ids)
-    predictions.index.name = 'id'
+    # predictions in .csv and .data format
+    if predict(trainer, model, ckpt_path, dm):
 
-    # prediction csv
-    run_dir = Path(trainer.log_dir)
-    predictions_csv = run_dir / 'predictions.csv.gz'
-    predictions.to_csv(predictions_csv)
+        # save segments ids per split
+        pd.DataFrame(dm.train_ids).to_csv(log_dir / 'train_ids.txt.gz', header=False, index=False)
+        pd.DataFrame(dm.valid_ids).to_csv(log_dir / 'valid_ids.txt.gz', header=False, index=False)
+        pd.DataFrame( dm.test_ids).to_csv(log_dir /  'test_ids.txt.gz', header=False, index=False)
 
-    # predictions in .data format
-    predictions_data_file = run_dir / 'predictions.data.gz'
-    predictions.index = predictions.index.str.rsplit('_', 1, expand=True).rename(['seq_id', 'frame'])
-
-    with gzip.open(predictions_data_file, 'wt', encoding='utf8') as f:
-        for seq_id, group in predictions.groupby(level='seq_id'):
-            print(f'#objectKey messif.objects.keys.AbstractObjectKey {seq_id}', file=f)
-            print(f'{len(group)};mcdr.objects.ObjectMocapPose', file=f)
-            print(group.to_csv(index=False, header=False), end='', file=f)
-
-    # segments ids
-    pd.DataFrame(dm.train_ids).to_csv(run_dir / 'train_ids.txt.gz', header=False, index=False)
-    pd.DataFrame(dm.valid_ids).to_csv(run_dir / 'valid_ids.txt.gz', header=False, index=False)
-    pd.DataFrame( dm.test_ids).to_csv(run_dir /  'test_ids.txt.gz', header=False, index=False)
+    # predictions on additional datasets
+    for additional_data_path in args.additional_data_path:
+        dm = MoCapDataModule(additional_data_path, batch_size=args.batch_size)
+        prefix = Path(additional_data_path).stem
+        predict(trainer, model, ckpt_path, dm, prefix=prefix)
 
 
 def argparse_cli():
@@ -353,6 +390,11 @@ def argparse_cli():
     parser.add_argument('-b', '--batch-size', type=int, default=512, help='batch size')
     parser.add_argument('-e', '--epochs', type=int, default=250, help='number of training epochs')
     parser.add_argument('-r', '--resume', default=False, action='store_true', help='resume training')
+
+    parser.add_argument('-a', '--additional-data-path', type=Path, nargs='+', help='additional data on which prediction is run after training')
+    parser.add_argument('--additional-train-split', type=Path, nargs='+', help='additional train sequence ids')
+    parser.add_argument('--additional-valid-split', type=Path, nargs='+', help='additional validation sequence ids')
+    parser.add_argument('--additional-test-split', type=Path, nargs='+', help='additional test sequence ids')
 
     args = parser.parse_args()
     main(args)
