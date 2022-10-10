@@ -88,6 +88,7 @@ class MoCapDataModule(pl.LightningDataModule):
         batch_size=8,
         seed=7,
         fps=12,
+        shuffle_train=True,
         force=False
     ):
         super().__init__()
@@ -101,6 +102,7 @@ class MoCapDataModule(pl.LightningDataModule):
 
         self.force = force
         self.rng = np.random.default_rng(seed)
+        self.shuffle_train = shuffle_train
 
         self.save_hyperparameters(ignore=('force',))
     
@@ -137,11 +139,16 @@ class MoCapDataModule(pl.LightningDataModule):
         else:
             with open(self.train, 'r') as train_file:
                 train_groups = list(map(str.rstrip, train_file))
-            with open(self.valid, 'r') as valid_file:
-                valid_groups = list(map(str.rstrip, valid_file))
-            with open(self.test , 'r') as  test_file:
-                test_groups  = list(map(str.rstrip,  test_file))
-                
+
+            valid_groups = []
+            if self.valid is not None:
+                with open(self.valid, 'r') as valid_file:
+                    valid_groups = list(map(str.rstrip, valid_file))
+
+            test_groups = []
+            if self.test is not None:
+                with open(self.test , 'r') as  test_file:
+                    test_groups  = list(map(str.rstrip,  test_file))
 
         train_idx = list(chain.from_iterable(grouped.get_group(x).index for x in train_groups))
         valid_idx = list(chain.from_iterable(grouped.get_group(x).index for x in valid_groups))
@@ -163,7 +170,7 @@ class MoCapDataModule(pl.LightningDataModule):
         print("predict_dataset len:", len(self.predict_dataset))
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True, num_workers=4)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=self.shuffle_train, pin_memory=True, num_workers=4)
 
     def val_dataloader(self):
         return DataLoader(self.valid_dataset, batch_size=self.batch_size, pin_memory=True, num_workers=4)
